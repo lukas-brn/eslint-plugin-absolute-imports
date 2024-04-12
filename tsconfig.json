@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "target": "ES2020",
+    "strictNullChecks": true,
+    "noImplicitAny": true
+  },
+  "env": {
+    "node": true
+  },
+  "include": ["**/*"]
+}

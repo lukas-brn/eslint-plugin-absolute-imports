@@ -2,7 +2,6 @@
   "name": "eslint-plugin-absolute-imports",
   "version": "0.0.3",
   "main": "index.js",
-  "dependencies": {},
   "description": "Eslint rule enforcing absolute imports",
   "license": "MIT",
   "author": {
@@ -20,5 +19,9 @@
     "eslint",
     "imports",
     "eslint-plugin"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@typescript-eslint/utils": "^7.6.0"
+  }
 }

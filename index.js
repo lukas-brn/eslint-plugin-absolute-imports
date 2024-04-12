@@ -1,87 +1,166 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const { join, normalize, dirname, relative } = require("path");
+const { has, getImportPrefixToAlias, getProjectRootOptions, getFallbackProjectRoot, getLanguageConfig } = require("./utils");
 
-function has(map, path) {
-  let inner = map;
-  for (let step of path.split(".")) {
-    inner = inner[step];
-    if (inner === undefined) {
-      return false;
+/**
+ * @param {string} absolutePath
+ * @param {string} baseUrl
+ * @param {Record<string, string>} importPrefixToAlias
+ * @param {boolean} onlyPathAliases
+ * @param {boolean} onlyAbsoluteImports
+ * @returns {string | undefined}
+ */
+function getExpectedPath(absolutePath, baseUrl, importPrefixToAlias, onlyPathAliases, onlyAbsoluteImports) {
+    const relativeToBasePath = relative(baseUrl, absolutePath);
+    if (!onlyAbsoluteImports) {
+        for (let prefix of Object.keys(importPrefixToAlias)) {
+            const aliasPath = importPrefixToAlias[prefix];
+            // assuming they are either a full path or a path ends with /*, which are the two standard cases
+            const importPrefix = prefix.endsWith("/*") ? prefix.replace("/*", "") : prefix;
+            const aliasImport = aliasPath.endsWith("/*") ? aliasPath.replace("/*", "") : aliasPath;
+            if (relativeToBasePath.startsWith(importPrefix)) {
+                return `${aliasImport}${relativeToBasePath.slice(importPrefix.length)}`;
+            }
+        }
     }
-  }
-  return true;
+    if (!onlyPathAliases) {
+        return relativeToBasePath;
+    }
 }
 
-function findDirWithFile(filename) {
-  let dir = path.resolve(filename);
+/**
+ * @param {Readonly<import("@typescript-eslint/utils/ts-eslint").RuleContext<string, readonly unknown[]>>} context
+ * @param {(path: string) => boolean} importPathConditionCallback
+ * @returns {import("@typescript-eslint/utils/ts-eslint").RuleListener}
+ */
+function generateRule(context, importPathConditionCallback) {
+    /** @type any */
+    const options = context.options[0] || {};
+    const onlyPathAliases = options.onlyPathAliases || false;
+    const onlyAbsoluteImports = options.onlyAbsoluteImports || false;
 
-  do {
-    dir = path.dirname(dir);
-  } while (!fs.existsSync(path.join(dir, filename)) && dir !== "/");
+    const filename = context.filename ?? context.getFilename();
 
-  if (!fs.existsSync(path.join(dir, filename))) {
-    return;
-  }
+    const settings = context.settings["absolute-imports"];
+    /** @type {string[]} */
+    let projectRootOptions = [];
+    if (typeof settings === "object" && settings !== null && "projectRoot" in settings) {
+        projectRootOptions = getProjectRootOptions(settings.projectRoot);
+    } else {
+        const fallbackProjectRoot = getFallbackProjectRoot(dirname(filename));
+        if (fallbackProjectRoot) {
+            projectRootOptions = [fallbackProjectRoot];
+        }
+    }
 
-  return dir;
+    const langConfig = getLanguageConfig(projectRootOptions, filename);
+    if (!langConfig) {
+        return {};
+    }
+
+    let baseUrl = undefined;
+    if (langConfig && has(langConfig[1], "compilerOptions.baseUrl")) {
+        baseUrl = join(langConfig[0], langConfig[1].compilerOptions.baseUrl);
+    }
+    if (!baseUrl) {
+        return {};
+    }
+
+    /** @type {Record<string, string[]>} */
+    let paths = {};
+    if (langConfig && has(langConfig[1], "compilerOptions.paths")) {
+        const configPaths = langConfig[1].compilerOptions.paths;
+        if (typeof configPaths === "object") {
+            for (const key of Object.keys(configPaths)) {
+                if (Array.isArray(configPaths[key])) {
+                    paths[key] = [];
+                    for (const configPath of configPaths[key]) {
+                        if (typeof configPath === "string") {
+                            paths[key].push(configPath);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    const importPrefixToAlias = getImportPrefixToAlias(paths);
+
+    return {
+        ImportDeclaration(node) {
+            const actualPath = node.source.value;
+            if (importPathConditionCallback(actualPath)) {
+                const absolutePath = normalize(
+                    join(dirname(filename), actualPath)
+                );
+                const expectedPath = getExpectedPath(
+                    absolutePath,
+                    baseUrl,
+                    importPrefixToAlias,
+                    onlyPathAliases,
+                    onlyAbsoluteImports,
+                );
+
+                if (expectedPath && actualPath !== expectedPath) {
+                    context.report({
+                        node,
+                        data: { expectedPath, actualPath: actualPath },
+                        messageId: "relativeImport",
+                        fix: function(fixer) {
+                            return fixer.replaceText(node.source, `'${expectedPath}'`);
+                        },
+                    });
+                }
+            }
+        },
+    };
 }
 
-function getBaseUrl(baseDir) {
-  let url = "";
-
-  if (fs.existsSync(path.join(baseDir, "tsconfig.json"))) {
-    const tsconfig = JSON.parse(
-      fs.readFileSync(path.join(baseDir, "tsconfig.json"))
-    );
-    if (has(tsconfig, "compilerOptions.baseUrl")) {
-      url = tsconfig.compilerOptions.baseUrl;
+const optionsSchema = {
+    type: 'object',
+    properties: {
+        onlyPathAliases: {
+            type: 'boolean',
+        },
+        onlyAbsoluteImports: {
+            type: 'boolean',
+        },
     }
-  } else if (fs.existsSync(path.join(baseDir, "jsconfig.json"))) {
-    const jsconfig = JSON.parse(
-      fs.readFileSync(path.join(baseDir, "jsconfig.json"))
-    );
-    if (has(jsconfig, "compilerOptions.baseUrl")) {
-      url = jsconfig.compilerOptions.baseUrl;
-    }
-  }
-
-  return path.join(baseDir, url);
 }
 
 module.exports.rules = {
-  "only-absolute-imports": {
-    meta: {
-      fixable: true,
-    },
-    create: function (context) {
-      const baseDir = findDirWithFile("package.json");
-      const baseUrl = getBaseUrl(baseDir);
-
-      return {
-        ImportDeclaration(node) {
-          const source = node.source.value;
-          if (source.startsWith(".")) {
-            const filename = context.getFilename();
-
-            const absolutePath = path.normalize(
-              path.join(path.dirname(filename), source)
-            );
-            const expectedPath = path.relative(baseUrl, absolutePath);
-
-            if (source !== expectedPath) {
-              context.report({
-                node,
-                message: `Relative imports are not allowed. Use \`${expectedPath}\` instead of \`${source}\`.`,
-                fix: function (fixer) {
-                  return fixer.replaceText(node.source, `'${expectedPath}'`);
-                },
-              });
-            }
-          }
+    "no-relative-imports": /** @type {import("@typescript-eslint/utils").TSESLint.AnyRuleModule} */({
+        meta: {
+            fixable: "code",
+            messages: {
+                "relativeImport": "Relative imports are not allowed. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.",
+            },
+            type: "problem",
+            schema: [optionsSchema]
         },
-      };
-    },
-  },
+        defaultOptions: [],
+        create: function(context) {
+            return generateRule(
+                context,
+                source => source.startsWith(".")
+            );
+        }
+    }),
+    "no-relative-parent-imports": /** @type {import("@typescript-eslint/utils").TSESLint.AnyRuleModule} */({
+        meta: {
+            fixable: "code",
+            messages: {
+                "relativeImport": "Relative imports from parent directories are not allowed. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.",
+            },
+            type: "problem",
+            schema: [optionsSchema]
+        },
+        defaultOptions: [],
+        create: function(context) {
+            return generateRule(
+                context,
+                source => source.startsWith("..")
+            );
+        }
+    }),
 };
