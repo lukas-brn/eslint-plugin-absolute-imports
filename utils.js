@@ -50,7 +50,6 @@ function isString(value) {
 /** @type {Record<string, string[] | undefined>} */
 const baseUrlCache = {};
 
-// TODO: can this be async?
 /**
  * @param {unknown} projectConfig
  * @returns {string[]}
