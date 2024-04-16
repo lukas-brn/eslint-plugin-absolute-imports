@@ -1,3 +1,5 @@
+"use strict";
+
 const { existsSync, readFileSync } = require("fs");
 const { delimiter, relative, sep, join, parse, resolve, dirname } = require("path");
 const { resolveGlobToPaths } = require("./glob");
@@ -113,12 +115,13 @@ function getCommonPathSegmentCount(path1, path2) {
 /**
  * @param {string[]} baseDirOptions
  * @param {string} filename
- * @returns {[string, any] | undefined} [ProjectRootPath, LanguageConfig]
+ * @returns {[string, any] | string | undefined} [ProjectRootPath, LanguageConfig]
  */
 function getLanguageConfig(baseDirOptions, filename) {
     let bestMatchCommonPathSegmentCount = 0;
     /** @type [string, any] | undefined */
     let bestMatch = undefined;
+
 
     for (const baseDir of baseDirOptions) {
         const commonPathSegmentCount = getCommonPathSegmentCount(baseDir, filename);
@@ -132,10 +135,12 @@ function getLanguageConfig(baseDirOptions, filename) {
             const configFilePath = join(baseDir, configFileName);
             if (existsSync(configFilePath)) {
                 try {
-                    bestMatch = [baseDir, JSON.parse(readFileSync(configFilePath).toString())];
+                    const configContent = JSON.parse(readFileSync(configFilePath).toString());
+                    bestMatch = [baseDir, configContent];
                     bestMatchCommonPathSegmentCount = commonPathSegmentCount;
                 } catch (e) {
-                    return undefined;
+                    // NOTE: this error output to the user as an error with some description
+                    return configFilePath;
                 }
             }
         }

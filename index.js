@@ -58,6 +58,17 @@ function generateRule(context, importPathConditionCallback) {
     if (!langConfig) {
         return {};
     }
+    if (typeof langConfig === "string") {
+        return {
+            Program(node) {
+                context.report({
+                    node,
+                    data: { configPath: langConfig },
+                    messageId: "invalidConfigJson"
+                });
+            }
+        };
+    }
 
     let baseUrl = undefined;
     if (langConfig && has(langConfig[1], "compilerOptions.baseUrl")) {
@@ -107,7 +118,8 @@ function generateRule(context, importPathConditionCallback) {
                         data: { expectedPath, actualPath: actualPath },
                         messageId: "relativeImport",
                         fix: function(fixer) {
-                            return fixer.replaceText(node.source, `'${expectedPath}'`);
+                            const stringSymbol = node.source.raw.startsWith('"') ? '"' : "'";
+                            return fixer.replaceText(node.source, `${stringSymbol}${expectedPath}${stringSymbol}`);
                         },
                     });
                 }
@@ -116,28 +128,38 @@ function generateRule(context, importPathConditionCallback) {
     };
 }
 
-const optionsSchema = {
-    type: 'object',
+
+const optionsSchema = /** @type {const} */({
+    type: "object",
     properties: {
         onlyPathAliases: {
-            type: 'boolean',
+            type: "boolean",
         },
         onlyAbsoluteImports: {
-            type: 'boolean',
+            type: "boolean",
         },
     }
+});
+
+/**
+ * @param {string} relativeImportPrefix
+ * @returns {import("@typescript-eslint/utils/ts-eslint").RuleMetaData<"relativeImport" | "invalidConfigJson", import("@typescript-eslint/utils/json-schema").JSONSchema4[]>}
+ */
+function getRuleMetadata(relativeImportPrefix) {
+    return {
+        fixable: "code",
+        messages: {
+            "relativeImport": `${relativeImportPrefix}. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.`,
+            "invalidConfigJson": "Best config file match \`{{configPath}}\` didn't contain valid json."
+        },
+        type: "problem",
+        schema: [optionsSchema]
+    };
 }
 
-module.exports.rules = {
-    "no-relative-imports": /** @type {import("@typescript-eslint/utils").TSESLint.AnyRuleModule} */({
-        meta: {
-            fixable: "code",
-            messages: {
-                "relativeImport": "Relative imports are not allowed. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.",
-            },
-            type: "problem",
-            schema: [optionsSchema]
-        },
+module.exports.rules = /** @type {Record<string, import("@typescript-eslint/utils").TSESLint.AnyRuleModule>} */({
+    "no-relative-imports": {
+        meta: getRuleMetadata("Relative imports are not allowed"),
         defaultOptions: [],
         create: function(context) {
             return generateRule(
@@ -145,16 +167,9 @@ module.exports.rules = {
                 source => source.startsWith(".")
             );
         }
-    }),
-    "no-relative-parent-imports": /** @type {import("@typescript-eslint/utils").TSESLint.AnyRuleModule} */({
-        meta: {
-            fixable: "code",
-            messages: {
-                "relativeImport": "Relative imports from parent directories are not allowed. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.",
-            },
-            type: "problem",
-            schema: [optionsSchema]
-        },
+    },
+    "no-relative-parent-imports": {
+        meta: getRuleMetadata("Relative imports from parent directories are not allowed"),
         defaultOptions: [],
         create: function(context) {
             return generateRule(
@@ -162,5 +177,5 @@ module.exports.rules = {
                 source => source.startsWith("..")
             );
         }
-    }),
-};
+    },
+});

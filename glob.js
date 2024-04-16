@@ -1,3 +1,5 @@
+"use strict";
+
 const { existsSync, statSync, readdirSync } = require("fs");
 const { resolve, join } = require("path");
 
