@@ -78,12 +78,17 @@ function generateRule(context, importPathConditionCallback) {
     if (!langConfig) {
         return {};
     }
-    if (typeof langConfig === "string") {
+    if (langConfig && !Array.isArray(langConfig)) {
         return {
             Program(node) {
                 context.report({
                     node,
-                    data: { configPath: langConfig },
+                    data: {
+                        configPath: langConfig.configFilePath,
+                        errors: langConfig.errors
+                            .map((e) => `${e.error}: ${e.offset} ${e.length}`)
+                            .join("\n"),
+                    },
                     messageId: "invalidConfigJson",
                 });
             },
@@ -175,7 +180,7 @@ function getRuleMetadata(relativeImportPrefix) {
         messages: {
             relativeImport: `${relativeImportPrefix}. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.`,
             invalidConfigJson:
-                "Best config file match `{{configPath}}` didn't contain valid json.",
+                "Encountered the following errors while parsing the config file match `{{configPath}}`:\n{{errors}}",
         },
         type: "problem",
         schema: [optionsSchema],

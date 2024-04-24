@@ -23,5 +23,8 @@
   "devDependencies": {
     "@types/node": "^20.12.7",
     "@typescript-eslint/utils": "^7.6.0"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.2.1"
   }
 }

@@ -11,6 +11,7 @@ const {
     dirname,
 } = require("path");
 const { resolveGlobToPaths } = require("./glob");
+const { parse: parseJsonC, printParseErrorCode } = require("jsonc-parser");
 
 /**
  * @param {object} map
@@ -123,9 +124,18 @@ function getCommonPathSegmentCount(path1, path2) {
 }
 
 /**
+ * @typedef {{
+ *  configFilePath: string,
+ *  errors: (Omit<import("jsonc-parser").ParseError, "error"> & {
+ *      error: ReturnType<typeof printParseErrorCode>
+ *  })[]
+ * }} GetLanguageConfigError
+ */
+
+/**
  * @param {string[]} baseDirOptions
  * @param {string} filename
- * @returns {[string, any] | string | undefined} [ProjectRootPath, LanguageConfig]
+ * @returns {[string, any] | GetLanguageConfigError | undefined} [ProjectRootPath, LanguageConfig]
  */
 function getLanguageConfig(baseDirOptions, filename) {
     let bestMatchCommonPathSegmentCount = 0;
@@ -146,14 +156,29 @@ function getLanguageConfig(baseDirOptions, filename) {
         for (const configFileName of configFileNames) {
             const configFilePath = join(baseDir, configFileName);
             if (existsSync(configFilePath)) {
-                try {
-                    const configContent = JSON.parse(readFileSync(configFilePath).toString());
-                    bestMatch = [baseDir, configContent];
-                    bestMatchCommonPathSegmentCount = commonPathSegmentCount;
-                } catch (e) {
+                const rawContent = readFileSync(configFilePath).toString();
+
+                /** @type {import("jsonc-parser").ParseError[]} */
+                const parseErrors = [];
+                const configContent = parseJsonC(rawContent, parseErrors, {
+                    disallowComments: false,
+                    allowTrailingComma: true,
+                    allowEmptyContent: true,
+                });
+
+                if (parseErrors.length > 0) {
                     // NOTE: this error output to the user as an error with some description
-                    return configFilePath;
+                    return {
+                        configFilePath,
+                        errors: parseErrors.map((e) => ({
+                            ...e,
+                            error: printParseErrorCode(e.error),
+                        })),
+                    };
                 }
+
+                bestMatch = [baseDir, configContent];
+                bestMatchCommonPathSegmentCount = commonPathSegmentCount;
             }
         }
     }
