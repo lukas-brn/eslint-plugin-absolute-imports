@@ -1,7 +1,13 @@
 "use strict";
 
 const { join, normalize, dirname, relative } = require("path");
-const { has, getImportPrefixToAlias, getProjectRootOptions, getFallbackProjectRoot, getLanguageConfig } = require("./utils");
+const {
+    has,
+    getImportPrefixToAlias,
+    getProjectRootOptions,
+    getFallbackProjectRoot,
+    getLanguageConfig,
+} = require("./utils");
 
 /**
  * @param {string} absolutePath
@@ -11,14 +17,24 @@ const { has, getImportPrefixToAlias, getProjectRootOptions, getFallbackProjectRo
  * @param {boolean} onlyAbsoluteImports
  * @returns {string | undefined}
  */
-function getExpectedPath(absolutePath, baseUrl, importPrefixToAlias, onlyPathAliases, onlyAbsoluteImports) {
+function getExpectedPath(
+    absolutePath,
+    baseUrl,
+    importPrefixToAlias,
+    onlyPathAliases,
+    onlyAbsoluteImports,
+) {
     const relativeToBasePath = relative(baseUrl, absolutePath);
     if (!onlyAbsoluteImports) {
         for (let prefix of Object.keys(importPrefixToAlias)) {
             const aliasPath = importPrefixToAlias[prefix];
             // assuming they are either a full path or a path ends with /*, which are the two standard cases
-            const importPrefix = prefix.endsWith("/*") ? prefix.replace("/*", "") : prefix;
-            const aliasImport = aliasPath.endsWith("/*") ? aliasPath.replace("/*", "") : aliasPath;
+            const importPrefix = prefix.endsWith("/*")
+                ? prefix.replace("/*", "")
+                : prefix;
+            const aliasImport = aliasPath.endsWith("/*")
+                ? aliasPath.replace("/*", "")
+                : aliasPath;
             if (relativeToBasePath.startsWith(importPrefix)) {
                 return `${aliasImport}${relativeToBasePath.slice(importPrefix.length)}`;
             }
@@ -45,7 +61,11 @@ function generateRule(context, importPathConditionCallback) {
     const settings = context.settings["absolute-imports"];
     /** @type {string[]} */
     let projectRootOptions = [];
-    if (typeof settings === "object" && settings !== null && "projectRoot" in settings) {
+    if (
+        typeof settings === "object" &&
+        settings !== null &&
+        "projectRoot" in settings
+    ) {
         projectRootOptions = getProjectRootOptions(settings.projectRoot);
     } else {
         const fallbackProjectRoot = getFallbackProjectRoot(dirname(filename));
@@ -64,9 +84,9 @@ function generateRule(context, importPathConditionCallback) {
                 context.report({
                     node,
                     data: { configPath: langConfig },
-                    messageId: "invalidConfigJson"
+                    messageId: "invalidConfigJson",
                 });
-            }
+            },
         };
     }
 
@@ -102,7 +122,7 @@ function generateRule(context, importPathConditionCallback) {
             const actualPath = node.source.value;
             if (importPathConditionCallback(actualPath)) {
                 const absolutePath = normalize(
-                    join(dirname(filename), actualPath)
+                    join(dirname(filename), actualPath),
                 );
                 const expectedPath = getExpectedPath(
                     absolutePath,
@@ -117,9 +137,14 @@ function generateRule(context, importPathConditionCallback) {
                         node,
                         data: { expectedPath, actualPath: actualPath },
                         messageId: "relativeImport",
-                        fix: function(fixer) {
-                            const stringSymbol = node.source.raw.startsWith('"') ? '"' : "'";
-                            return fixer.replaceText(node.source, `${stringSymbol}${expectedPath}${stringSymbol}`);
+                        fix: function (fixer) {
+                            const stringSymbol = node.source.raw.startsWith('"')
+                                ? '"'
+                                : "'";
+                            return fixer.replaceText(
+                                node.source,
+                                `${stringSymbol}${expectedPath}${stringSymbol}`,
+                            );
                         },
                     });
                 }
@@ -128,8 +153,7 @@ function generateRule(context, importPathConditionCallback) {
     };
 }
 
-
-const optionsSchema = /** @type {const} */({
+const optionsSchema = /** @type {const} */ ({
     type: "object",
     properties: {
         onlyPathAliases: {
@@ -138,7 +162,7 @@ const optionsSchema = /** @type {const} */({
         onlyAbsoluteImports: {
             type: "boolean",
         },
-    }
+    },
 });
 
 /**
@@ -149,33 +173,35 @@ function getRuleMetadata(relativeImportPrefix) {
     return {
         fixable: "code",
         messages: {
-            "relativeImport": `${relativeImportPrefix}. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.`,
-            "invalidConfigJson": "Best config file match \`{{configPath}}\` didn't contain valid json."
+            relativeImport: `${relativeImportPrefix}. Use \`{{expectedPath}}\` instead of \`{{actualPath}}\`.`,
+            invalidConfigJson:
+                "Best config file match `{{configPath}}` didn't contain valid json.",
         },
         type: "problem",
-        schema: [optionsSchema]
+        schema: [optionsSchema],
     };
 }
 
-module.exports.rules = /** @type {Record<string, import("@typescript-eslint/utils").TSESLint.AnyRuleModule>} */({
-    "no-relative-imports": {
-        meta: getRuleMetadata("Relative imports are not allowed"),
-        defaultOptions: [],
-        create: function(context) {
-            return generateRule(
-                context,
-                source => source.startsWith(".")
-            );
-        }
-    },
-    "no-relative-parent-imports": {
-        meta: getRuleMetadata("Relative imports from parent directories are not allowed"),
-        defaultOptions: [],
-        create: function(context) {
-            return generateRule(
-                context,
-                source => source.startsWith("..")
-            );
-        }
-    },
-});
+module.exports.rules =
+    /** @type {Record<string, import("@typescript-eslint/utils").TSESLint.AnyRuleModule>} */ ({
+        "no-relative-imports": {
+            meta: getRuleMetadata("Relative imports are not allowed"),
+            defaultOptions: [],
+            create: function (context) {
+                return generateRule(context, (source) =>
+                    source.startsWith("."),
+                );
+            },
+        },
+        "no-relative-parent-imports": {
+            meta: getRuleMetadata(
+                "Relative imports from parent directories are not allowed",
+            ),
+            defaultOptions: [],
+            create: function (context) {
+                return generateRule(context, (source) =>
+                    source.startsWith(".."),
+                );
+            },
+        },
+    });

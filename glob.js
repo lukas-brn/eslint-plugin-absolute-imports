@@ -21,7 +21,10 @@ function resolveGlobToPaths(glob, pwd) {
         } else if (segment === "**") {
             resolvedPaths = resolveGlobDoubleStarSegmentToPaths(resolvedPaths);
         } else {
-            resolvedPaths = resolveGlobSimpleSegmentToPaths(resolvedPaths, segment);
+            resolvedPaths = resolveGlobSimpleSegmentToPaths(
+                resolvedPaths,
+                segment,
+            );
         }
     }
 

@@ -1,7 +1,15 @@
 "use strict";
 
 const { existsSync, readFileSync } = require("fs");
-const { delimiter, relative, sep, join, parse, resolve, dirname } = require("path");
+const {
+    delimiter,
+    relative,
+    sep,
+    join,
+    parse,
+    resolve,
+    dirname,
+} = require("path");
 const { resolveGlobToPaths } = require("./glob");
 
 /**
@@ -14,7 +22,7 @@ function has(map, path) {
     let inner = map;
     for (let step of path.split(".")) {
         if (typeof inner === "object" && inner !== null && step in inner) {
-            inner = inner[/** @type keyof typeof inner */(step)];
+            inner = inner[/** @type keyof typeof inner */ (step)];
             if (inner === undefined) {
                 return false;
             }
@@ -32,8 +40,10 @@ function has(map, path) {
  * @returns {Record<V, K>}
  */
 function getImportPrefixToAlias(paths) {
-    const reversed = /** @type {Record<V, K>} */({});
-    for (let key of /** @type {(keyof typeof paths)[]} */(Object.keys(paths))) {
+    const reversed = /** @type {Record<V, K>} */ ({});
+    for (let key of /** @type {(keyof typeof paths)[]} */ (
+        Object.keys(paths)
+    )) {
         for (let path of paths[key]) {
             reversed[path] = key;
         }
@@ -71,7 +81,7 @@ function getProjectRootOptions(projectConfig) {
         return cacheEntry;
     }
 
-    const res = projectGlobs.flatMap(glob => resolveGlobToPaths(glob));
+    const res = projectGlobs.flatMap((glob) => resolveGlobToPaths(glob));
     baseUrlCache[cacheKey] = res;
     return res;
 }
@@ -122,9 +132,11 @@ function getLanguageConfig(baseDirOptions, filename) {
     /** @type [string, any] | undefined */
     let bestMatch = undefined;
 
-
     for (const baseDir of baseDirOptions) {
-        const commonPathSegmentCount = getCommonPathSegmentCount(baseDir, filename);
+        const commonPathSegmentCount = getCommonPathSegmentCount(
+            baseDir,
+            filename,
+        );
         if (commonPathSegmentCount <= bestMatchCommonPathSegmentCount) {
             continue;
         }
@@ -149,4 +161,10 @@ function getLanguageConfig(baseDirOptions, filename) {
     return bestMatch;
 }
 
-module.exports = { has, getImportPrefixToAlias, getProjectRootOptions, getFallbackProjectRoot, getLanguageConfig };
+module.exports = {
+    has,
+    getImportPrefixToAlias,
+    getProjectRootOptions,
+    getFallbackProjectRoot,
+    getLanguageConfig,
+};
