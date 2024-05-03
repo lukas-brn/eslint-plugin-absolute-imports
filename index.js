@@ -1,6 +1,6 @@
 "use strict";
 
-const { join, normalize, dirname, relative } = require("path");
+const { join, normalize, dirname, relative, sep } = require("path");
 const {
     has,
     getImportPrefixToAlias,
@@ -25,6 +25,10 @@ function getExpectedPath(
     onlyAbsoluteImports,
 ) {
     const relativeToBasePath = relative(baseUrl, absolutePath);
+    if (relativeToBasePath.startsWith(`..${sep}`)) {
+        return;
+    }
+
     if (!onlyAbsoluteImports) {
         for (let prefix of Object.keys(importPrefixToAlias)) {
             const aliasPath = importPrefixToAlias[prefix];
